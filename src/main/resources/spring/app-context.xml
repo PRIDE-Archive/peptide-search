@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:jpa="http://www.springframework.org/schema/data/jpa"
+       xsi:schemaLocation="http://www.springframework.org/schema/tx
+                           http://www.springframework.org/schema/tx/spring-tx-3.0.xsd
+                           http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+                           http://www.springframework.org/schema/context
+                           http://www.springframework.org/schema/context/spring-context-3.1.xsd
+                           http://www.springframework.org/schema/data/jpa
+                           http://www.springframework.org/schema/data/jpa/spring-jpa.xsd">
+
+    <context:annotation-config />
+
+    <tx:annotation-driven/>
+
+    <!--Setup data source using place holder properties-->
+    <bean id="prideDataSource" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close">
+        <property name="driverClassName" value="${prider.jdbc.driver}"/>
+        <property name="url" value="${prider.jdbc.url}"/>
+        <property name="username" value="${prider.jdbc.user}"/>
+        <property name="password" value="${prider.jdbc.password}"/>
+        <property name="maxActive" value="6"/>
+        <property name="validationQuery" value="select 1 from dual"/>
+        <property name="testWhileIdle" value="true"/>
+         <property name="testOnBorrow" value="true"/>
+    </bean>
+
+    <bean id="entityManagerFactory" class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean">
+        <property name="dataSource" ref="prideDataSource"/>
+        <property name="jpaVendorAdapter">
+            <bean class="org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter">
+                <property name="generateDdl" value="false"/>
+                <property name="database" value="ORACLE"/>
+                <property name="showSql" value="false"/>
+            </bean>
+        </property>
+    </bean>
+
+    <bean class="org.springframework.orm.jpa.JpaTransactionManager" id="transactionManager">
+        <property name="entityManagerFactory" ref="entityManagerFactory"/>
+        <property name="jpaDialect">
+            <bean class="org.springframework.orm.jpa.vendor.HibernateJpaDialect"/>
+        </property>
+    </bean>
+
+    <context:component-scan base-package="uk.ac.ebi.pride.scripts"/>
+    <jpa:repositories base-package="uk.ac.ebi.pride.archive.repo"/>
+
+
+    <!--Solr servers-->
+    <bean id="projectSolrServer" class="org.apache.solr.client.solrj.impl.HttpSolrServer">
+        <constructor-arg name="baseURL" value="${solr.server.project.core.url}" />
+    </bean>
+
+    <bean id="proteinSolrServer" class="org.apache.solr.client.solrj.impl.HttpSolrServer">
+        <constructor-arg name="baseURL" value="${solr.server.protein.core.url}" />
+    </bean>
+
+    <bean id="psmSolrServer" class="org.apache.solr.client.solrj.impl.HttpSolrServer">
+        <constructor-arg name="baseURL" value="${solr.server.psm.core.url}" />
+    </bean>
+
+    <bean id="spectrumSolrServer" class="org.apache.solr.client.solrj.impl.HttpSolrServer">
+        <constructor-arg name="baseURL" value="${solr.server.spectrum.core.url}" />
+    </bean>
+
+    <!--DAOs and repositories-->
+    <bean id="projectSearchDao" class="uk.ac.ebi.pride.archive.search.service.dao.solr.ProjectSearchDaoSolr">
+        <constructor-arg name="projectServer" ref="projectSolrServer" />
+    </bean>
+
+    <bean id="projectSearchService" class="uk.ac.ebi.pride.archive.search.service.ProjectSearchService">
+        <constructor-arg ref="projectSearchDao"/>
+    </bean>
+
+    <bean id="proteinSolrTemplate" class="org.springframework.data.solr.core.SolrTemplate">
+        <constructor-arg name="solrServer" ref="proteinSolrServer"/>
+    </bean>
+
+    <bean id="psmSolrTemplate" class="org.springframework.data.solr.core.SolrTemplate">
+        <constructor-arg name="solrServer" ref="psmSolrServer"/>
+    </bean>
+
+
+    <!-- Protein repository -->
+    <bean id="solrProteinIdentificationRepositoryFactory" class="uk.ac.ebi.pride.proteinidentificationindex.search.service.repository.SolrProteinIdentificationRepositoryFactory">
+        <constructor-arg ref="proteinSolrTemplate"/>
+    </bean>
+
+    <bean id="proteinIdentificationSearchService" class="uk.ac.ebi.pride.proteinidentificationindex.search.service.ProteinIdentificationSearchService">
+        <constructor-arg value="#{ solrProteinIdentificationRepositoryFactory.create() }"/>
+    </bean>
+
+    <!-- PSM repository -->
+    <bean id="solrPsmRepositoryFactory" class="uk.ac.ebi.pride.psmindex.search.service.repository.SolrPsmRepositoryFactory">
+        <constructor-arg ref="psmSolrTemplate"/>
+    </bean>
+
+    <bean id="psmInsecureSearchService" class="uk.ac.ebi.pride.psmindex.search.service.PsmSearchService">
+        <constructor-arg value="#{ solrPsmRepositoryFactory.create() }"/>
+    </bean>
+
+    <!--Secure psm service-->
+    <bean id="psmSecureSearchService" class="uk.ac.ebi.pride.archive.security.psm.PsmSecureSearchServiceImpl"/>
+
+
+    <!--Repo service-->
+    <bean id="assayService" class="uk.ac.ebi.pride.archive.repo.assay.service.AssayServiceImpl"/>
+    <bean id="projectService" class="uk.ac.ebi.pride.archive.repo.project.service.ProjectServiceImpl"/>
+
+    <!-- property files -->
+    <context:property-placeholder location="classpath:props/*.properties" ignore-unresolvable="true"/>
+
+</beans>

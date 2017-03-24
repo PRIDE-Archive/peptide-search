@@ -1,0 +1,2 @@
+ProteinName	Sequence
+Q6WRX3	WIQQNLQCLLLDSTSIPQNSR
